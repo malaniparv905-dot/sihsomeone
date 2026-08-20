@@ -13,14 +13,14 @@ import {
   Download, 
   Cpu
 } from 'lucide-react';
-import { MOCK_PRESETS_EV } from '../data/mockData';
+import { MOCK_PRESETS_EV, evaluateEvBattery } from '../data/mockData';
 import RecoveryPathwayVisualizer from '../components/RecoveryPathwayVisualizer';
 
 export default function EvBatteryPage({ onSaveAssessment, onViewReport, showToast }) {
   // Preset 1 (SAFE) default
   const [selectedPresetId, setSelectedPresetId] = useState('ev-safe-1');
   const [formData, setFormData] = useState(MOCK_PRESETS_EV[0].data);
-  const [activeResult, setActiveResult] = useState(MOCK_PRESETS_EV[0].result);
+  const [activeResult, setActiveResult] = useState(evaluateEvBattery(MOCK_PRESETS_EV[0].data));
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -29,88 +29,28 @@ export default function EvBatteryPage({ onSaveAssessment, onViewReport, showToas
     setSelectedPresetId(preset.id);
     setFormData(preset.data);
     setIsSaved(false);
-    runAssessment(preset.data, preset.result);
+    runAssessment(preset.data);
     if (showToast) {
       showToast(`Loaded ${preset.name} demonstration scenario.`, preset.type === 'UNSAFE' ? 'error' : 'success');
     }
   };
 
-  // Run AI Assessment (Transient Evaluation - DOES NOT SAVE TO STORE)
-  const runAssessment = (dataToUse = formData, presetResult = null) => {
+  // Run AI Assessment using SINGLE SOURCE OF TRUTH dynamic evaluation engine
+  const runAssessment = (dataToUse = formData) => {
     setIsEvaluating(true);
     setIsSaved(false);
 
     setTimeout(() => {
       setIsEvaluating(false);
-
-      if (presetResult) {
-        setActiveResult(presetResult);
-        return;
-      }
-
-      // Dynamic evaluation based on inputs
-      const isUnsafe = 
-        dataToUse.soh < 50 || 
-        dataToUse.temperature > 40 || 
-        dataToUse.visibleDamage === 'Detected' || 
-        dataToUse.swelling === 'Yes' || 
-        dataToUse.safetyInspection === 'Failed';
-
-      if (isUnsafe) {
-        setActiveResult({
-          safetyStatus: "FAIL",
-          health: `${dataToUse.soh}%`,
-          physicalCondition: "DAMAGED",
-          recoveryPotential: "LOW",
-          recommendedPath: "RECYCLING",
-          confidence: 97,
-          riskLevel: "HIGH",
-          reasoning: "Configured safety criteria were not satisfied. Second-life use and repurposing are blocked in the prototype decision logic, with recycling selected as the safer pathway.",
-          rejectionExplanation: "Predefined prototype safety criteria were not satisfied. Second-life use and repurposing are therefore blocked, while recycling is recommended as the safer recovery pathway.",
-          safetyChecks: [
-            { title: "Temperature within acceptable range", passed: dataToUse.temperature <= 40, detail: `${dataToUse.temperature}°C (Limit: 40°C)` },
-            { title: "No visible damage", passed: dataToUse.visibleDamage === 'None', detail: dataToUse.visibleDamage },
-            { title: "No swelling detected", passed: dataToUse.swelling === 'No', detail: dataToUse.swelling === 'Yes' ? "Swelling detected" : "Normal" },
-            { title: "No leakage detected", passed: dataToUse.leakage === 'No', detail: dataToUse.leakage },
-            { title: "Safety inspection passed", passed: dataToUse.safetyInspection === 'Passed', detail: "Failed prototype safety assessment criteria" }
-          ],
-          pathwayMatrix: [
-            { path: "Second-life", status: "✕ BLOCKED", approved: false, disabled: true, note: "BLOCKED: Thermal runaway hazard under load." },
-            { path: "Repurposing", status: "✕ BLOCKED", approved: false, disabled: true, note: "BLOCKED: Grid connection denied due to structural swelling." },
-            { path: "Recycling", status: "✓ RECOMMENDED", approved: true, disabled: false, note: "Controlled automated discharge & closed-loop black mass extraction." },
-            { path: "Disposal", status: "Fallback", approved: false, disabled: true, note: "Controlled dismantling fallback." }
-          ]
-        });
-      } else {
-        setActiveResult({
-          safetyStatus: "SAFE",
-          health: `${dataToUse.soh}%`,
-          physicalCondition: "GOOD",
-          recoveryPotential: "HIGH",
-          recommendedPath: "SECOND-LIFE / REPURPOSING",
-          confidence: 91,
-          riskLevel: "Low",
-          reasoning: "Prototype safety assessment indicates that the entered battery parameters satisfy the configured demonstration criteria. Second-life use is therefore ranked as the preferred pathway.",
-          safetyChecks: [
-            { title: "Temperature within acceptable range", passed: true, detail: `${dataToUse.temperature}°C (Limit: 40°C)` },
-            { title: "No visible damage", passed: true, detail: "Casing 100% Intact" },
-            { title: "No swelling detected", passed: true, detail: "0mm expansion" },
-            { title: "No leakage detected", passed: true, detail: "Clear" },
-            { title: "Safety inspection passed", passed: true, detail: "Prototype Safety Assessment Passed" }
-          ],
-          pathwayMatrix: [
-            { path: "Second-life", status: "✓ Approved", approved: true, disabled: false, note: "Stationary BESS grid backup storage approved." },
-            { path: "Repurposing", status: "✓ Approved", approved: true, disabled: false, note: "Telecom battery module re-assembly approved." },
-            { path: "Recycling", status: "Fallback", approved: false, disabled: false, note: "Hydrometallurgy available if second-life demand is unmet." },
-            { path: "Disposal", status: "Not required", approved: false, disabled: true, note: "Environmentally prohibited." }
-          ]
-        });
-      }
-    }, 900);
+      const computedResult = evaluateEvBattery(dataToUse);
+      setActiveResult(computedResult);
+    }, 600);
   };
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    const updated = { ...formData, [field]: value };
+    setFormData(updated);
+    setIsSaved(false);
   };
 
   const buildRecordObject = () => {
@@ -121,7 +61,7 @@ export default function EvBatteryPage({ onSaveAssessment, onViewReport, showToas
       type: "ev",
       detectedMaterial: formData.chemistry,
       condition: activeResult.physicalCondition,
-      damageLevel: formData.swelling === 'Yes' ? "Critical" : "None",
+      damageLevel: activeResult.physicalCondition === 'DAMAGED' ? "Critical" : "None",
       recoverability: activeResult.recoveryPotential,
       confidence: activeResult.confidence,
       recommendedPath: isUnsafe ? "Recycling" : "Second-life",
@@ -165,6 +105,7 @@ export default function EvBatteryPage({ onSaveAssessment, onViewReport, showToas
   };
 
   const isUnsafeScenario = activeResult.safetyStatus === 'FAIL';
+  const isPhysicalDamaged = activeResult.physicalCondition === 'DAMAGED';
 
   return (
     <div className="space-y-6 pb-8">
@@ -264,7 +205,7 @@ export default function EvBatteryPage({ onSaveAssessment, onViewReport, showToas
                 value={formData.soh}
                 onChange={(e) => handleInputChange('soh', Number(e.target.value))}
                 className={`w-full bg-slate-950 border rounded-lg p-2 font-mono font-bold ${
-                  formData.soh < 50 ? 'text-red-400 border-red-500/50' : 'text-teal-400 border-slate-800'
+                  formData.soh < 50 ? 'text-amber-400 border-amber-500/50' : 'text-teal-400 border-slate-800'
                 }`}
               />
             </div>
@@ -341,7 +282,9 @@ export default function EvBatteryPage({ onSaveAssessment, onViewReport, showToas
               <select
                 value={formData.leakage}
                 onChange={(e) => handleInputChange('leakage', e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono"
+                className={`w-full bg-slate-950 border rounded-lg p-2 font-mono ${
+                  formData.leakage === 'Yes' ? 'text-red-400 border-red-500/50' : 'text-slate-200 border-slate-800'
+                }`}
               >
                 <option value="No">No</option>
                 <option value="Yes">Yes</option>
@@ -429,30 +372,39 @@ export default function EvBatteryPage({ onSaveAssessment, onViewReport, showToas
 
             {/* Metrics Breakdown Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-3 font-mono">
+              
+              {/* Battery Health (SoH %) */}
               <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
                 <span className="text-[10px] text-slate-500 uppercase block">Battery Health:</span>
-                <p className={`text-xl font-black mt-0.5 ${isUnsafeScenario ? 'text-red-400' : 'text-teal-400'}`}>
+                <p className={`text-xl font-black mt-0.5 ${formData.soh < 50 ? 'text-amber-400' : 'text-teal-400'}`}>
                   {activeResult.health}
                 </p>
               </div>
+
+              {/* Safety Status */}
               <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
                 <span className="text-[10px] text-slate-500 uppercase block">Safety Status:</span>
                 <p className={`text-sm font-bold mt-1 ${isUnsafeScenario ? 'text-red-400' : 'text-emerald-400'}`}>
                   {activeResult.safetyStatus}
                 </p>
               </div>
+
+              {/* Physical Condition (GOOD vs DAMAGED - STRICTLY DERIVED FROM PHYSICAL DAMAGE) */}
               <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
                 <span className="text-[10px] text-slate-500 uppercase block">Physical Condition:</span>
-                <p className={`text-xs font-bold mt-1 ${isUnsafeScenario ? 'text-red-400' : 'text-slate-200'}`}>
+                <p className={`text-xs font-bold mt-1 ${isPhysicalDamaged ? 'text-red-400' : 'text-emerald-400'}`}>
                   {activeResult.physicalCondition}
                 </p>
               </div>
+
+              {/* Recovery Potential */}
               <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
                 <span className="text-[10px] text-slate-500 uppercase block">Recovery Potential:</span>
                 <p className={`text-xs font-bold mt-1 ${isUnsafeScenario ? 'text-red-400' : 'text-cyan-400'}`}>
                   {activeResult.recoveryPotential}
                 </p>
               </div>
+
             </div>
 
             {/* Recommended Pathway Highlight */}
@@ -471,7 +423,7 @@ export default function EvBatteryPage({ onSaveAssessment, onViewReport, showToas
             </div>
           </div>
 
-          {/* SAFETY GATE VERIFICATION PANEL */}
+          {/* SAFETY GATE VERIFICATION PANEL CHECKLIST */}
           <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
             <h4 className="font-extrabold text-xs text-white uppercase tracking-wider flex items-center justify-between">
               <span className="flex items-center gap-1.5">
@@ -554,7 +506,7 @@ export default function EvBatteryPage({ onSaveAssessment, onViewReport, showToas
                   Why were these pathways rejected?
                 </h5>
                 <p className="text-red-200/90 leading-relaxed text-[11px]">
-                  "Predefined prototype safety criteria were not satisfied. Second-life use and repurposing are therefore blocked, while recycling is recommended as the safer recovery pathway."
+                  "{activeResult.rejectionExplanation}"
                 </p>
                 <div className="pt-2 text-[10px] font-mono text-red-300/80 flex items-center justify-between border-t border-red-900/60 flex-wrap gap-1">
                   <span>UNSAFE BATTERY</span>
