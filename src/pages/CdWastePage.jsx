@@ -9,12 +9,13 @@ import {
   Save, 
   Cpu,
   AlertTriangle,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Layers
 } from 'lucide-react';
 import { MOCK_SAMPLES_CD } from '../data/mockData';
 import RecoveryPathwayVisualizer from '../components/RecoveryPathwayVisualizer';
 
-// Deterministic Prototype AI Classification Layer for Uploaded Images
+// Deterministic Prototype AI Classification Layer for Real Uploaded Images
 export const classifyCdImage = (file) => {
   const name = (file?.name || '').toLowerCase();
   
@@ -155,7 +156,7 @@ export const classifyCdImage = (file) => {
       recoverability: "MEDIUM",
       reusePotential: "MEDIUM",
       recommendedPath: "REFURBISHMENT",
-      explanation: "Prototype analysis identified masonry red brick characteristics. Mortar de-mortaring recommended before re-use in non-structural masonry.",
+      explanation: "Image analysis identified masonry red brick characteristics. Mortar de-mortaring recommended before re-use in non-structural masonry.",
       co2: "Estimated 310 kg CO₂e",
       landfill: "1.25 Tonnes (Est.)",
       value: "Estimated ₹7,800",
@@ -177,7 +178,7 @@ export const classifyCdImage = (file) => {
       recoverability: "HIGH",
       reusePotential: "HIGH",
       recommendedPath: "REPURPOSING",
-      explanation: "Prototype analysis detected timber grain structures. Repurposing into interior architectural panels yields high recovery value.",
+      explanation: "Image analysis detected timber grain structures. Repurposing into interior architectural panels yields high recovery value.",
       co2: "Estimated 620 kg CO₂e",
       landfill: "0.85 Tonnes (Est.)",
       value: "Estimated ₹34,000",
@@ -199,7 +200,7 @@ export const classifyCdImage = (file) => {
       recoverability: "HIGH",
       reusePotential: "HIGH",
       recommendedPath: "REUSE",
-      explanation: "Prototype analysis detected structural steel geometry. Direct reuse in structural frames preserves embodied energy.",
+      explanation: "Image analysis detected structural steel geometry. Direct reuse in structural frames preserves embodied energy.",
       co2: "Estimated 1,450 kg CO₂e",
       landfill: "3.10 Tonnes (Est.)",
       value: "Estimated ₹95,000",
@@ -221,7 +222,7 @@ export const classifyCdImage = (file) => {
       recoverability: "HIGH",
       reusePotential: "HIGH",
       recommendedPath: "REUSE",
-      explanation: "Prototype analysis identified concrete structural element. Direct structural placement recommended over aggregate crushing.",
+      explanation: "Image analysis identified concrete structural element. Direct structural placement recommended over aggregate crushing.",
       co2: "Estimated 510 kg CO₂e",
       landfill: "1.80 Tonnes (Est.)",
       value: "Estimated ₹18,500",
@@ -260,7 +261,7 @@ export const classifyCdImage = (file) => {
 };
 
 export default function CdWastePage({ onSaveAssessment, onViewReport, showToast }) {
-  // Idle initial state (No pre-populated Concrete assessment)
+  // Idle initial state (No pre-populated Concrete assessment or image)
   const [selectedSample, setSelectedSample] = useState(null);
   const [uploadedImage, setUploadedImage] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -269,19 +270,20 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
   const [isSaved, setIsSaved] = useState(false);
   const [isDemoScenario, setIsDemoScenario] = useState(false);
 
-  // Trigger AI processing scan (Clears previous result first)
+  // Trigger AI processing scan (Clears previous state first)
   const triggerAiScan = (sample, customImg = null, fileObj = null) => {
-    // Clear previous result immediately
     setActiveResult(null);
     setIsProcessing(true);
     setProcessingStep(1);
     setIsSaved(false);
     
     if (sample) {
+      // Demo Scenario Mode: Clear uploaded image
       setSelectedSample(sample);
       setUploadedImage(null);
       setIsDemoScenario(true);
     } else if (customImg) {
+      // Real Upload Mode: Clear demo sample
       setSelectedSample(null);
       setUploadedImage(customImg);
       setIsDemoScenario(false);
@@ -299,7 +301,6 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
         const classifiedResult = classifyCdImage(fileObj);
         setActiveResult(classifiedResult);
       } else {
-        // Fallback default if customImg passed without fileObj
         setActiveResult({
           material: "CONCRETE",
           category: "C&D Waste",
@@ -309,7 +310,7 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
           recoverability: "HIGH",
           reusePotential: "HIGH",
           recommendedPath: "REUSE",
-          explanation: "Prototype assessment identifies sound material condition and low visible damage. Direct structural reuse is recommended.",
+          explanation: "Image analysis identified sound concrete structural element. Direct structural reuse is recommended.",
           co2: "Estimated 510 kg CO₂e",
           landfill: "1.80 Tonnes (Est.)",
           value: "Estimated ₹18,500",
@@ -345,7 +346,9 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
   const buildRecordObject = () => {
     if (!activeResult) return null;
     return {
-      title: `${activeResult.material} (AI Assessed)`,
+      title: isDemoScenario 
+        ? `[DEMO] ${activeResult.material} Scenario` 
+        : `${activeResult.material} (AI Assessed)`,
       category: "C&D",
       type: "cd",
       detectedMaterial: activeResult.material,
@@ -390,8 +393,6 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
     if (showToast) showToast('Assessment report downloaded.', 'info');
   };
 
-  const currentImage = uploadedImage || (selectedSample ? selectedSample.image : null);
-
   return (
     <div className="space-y-6 pb-8">
       
@@ -409,11 +410,11 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
           </p>
         </div>
 
-        {/* Explicit Demo Preset Buttons */}
+        {/* Demo Scenario Buttons */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-mono text-slate-400 mr-1">Demo Scenarios:</span>
           {MOCK_SAMPLES_CD.map((sample) => {
-            const isSelected = selectedSample?.id === sample.id && !uploadedImage;
+            const isSelected = selectedSample?.id === sample.id && isDemoScenario;
             return (
               <button
                 key={sample.id}
@@ -470,46 +471,65 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
             </div>
           </div>
 
-          {/* Image Preview / Idle Upload Box */}
+          {/* Image Preview Box */}
           <div className="relative rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden shadow-xl aspect-video sm:aspect-4/3 flex items-center justify-center">
             
-            {/* 1. IDLE STATE: No Image Uploaded Yet */}
-            {!currentImage && !isProcessing && (
+            {/* 1. IDLE STATE: No Uploaded Image & No Demo Selected */}
+            {!uploadedImage && !isDemoScenario && !isProcessing && (
               <div className="text-center p-6 space-y-3">
                 <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
                   <ImageIcon className="w-6 h-6" />
                 </div>
                 <div>
                   <p className="text-xs font-mono font-bold text-slate-300">
-                    No image uploaded
+                    No Image Uploaded
                   </p>
                   <p className="text-[11px] text-slate-500 mt-1 max-w-xs mx-auto">
-                    Upload a C&D material image to begin assessment or select a demo scenario above.
+                    Upload a C&D material image to run AI classification, or select a demo scenario above.
                   </p>
                 </div>
               </div>
             )}
 
-            {/* 2. IMAGE PREVIEW (Uploaded or Demo Preset) */}
-            {currentImage && (
+            {/* 2. DEMO SCENARIO MODE: Display Benchmark Reference Card */}
+            {isDemoScenario && selectedSample && !isProcessing && (
+              <div className="relative w-full h-full">
+                <img
+                  src={selectedSample.image}
+                  alt={`Demo Scenario - ${selectedSample.material}`}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent flex flex-col justify-between p-4">
+                  <div className="flex justify-between items-start">
+                    <span className="px-2.5 py-1 rounded-lg bg-teal-950/90 border border-teal-500/40 text-teal-300 font-mono text-xs font-bold shadow-md">
+                      DEMO SCENARIO: {selectedSample.material.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-[10px] font-mono text-slate-300 space-y-0.5">
+                    <p className="font-bold text-teal-300">Prototype Demonstration Benchmark</p>
+                    <p className="text-slate-400">Predefined demonstration dataset. Upload a file above to test real image analysis.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 3. REAL USER UPLOAD MODE: Display Uploaded Image */}
+            {uploadedImage && !isDemoScenario && (
               <img
-                src={currentImage}
-                alt="C&D Material Scan"
+                src={uploadedImage}
+                alt="Uploaded C&D Scan"
                 className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.src = "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=1000&q=80";
-                }}
               />
             )}
 
-            {/* 3. AI PROCESSING OVERLAY */}
+            {/* 4. AI PROCESSING OVERLAY */}
             {isProcessing && (
               <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 space-y-3 z-30">
                 <div className="p-3 rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-400">
                   <Cpu className="w-8 h-8 animate-pulse" />
                 </div>
                 <h4 className="text-xs font-mono font-bold text-teal-400 uppercase tracking-widest">
-                  Analyzing uploaded material...
+                  {isDemoScenario ? "Loading demo scenario..." : "Analyzing uploaded material..."}
                 </h4>
                 
                 <div className="space-y-1 text-xs text-slate-300 font-mono text-left w-56">
@@ -533,8 +553,8 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
               </div>
             )}
 
-            {/* 4. ACTIVE RESULT OVERLAY (Bound box) */}
-            {!isProcessing && activeResult && (
+            {/* 5. ACTIVE UPLOAD RESULT OVERLAY (Bound box for real uploads only) */}
+            {!isProcessing && activeResult && uploadedImage && !isDemoScenario && (
               <div className="absolute inset-4 border-2 border-teal-400/80 rounded-xl pointer-events-none flex flex-col justify-between p-3">
                 <div className="flex justify-between items-start flex-wrap gap-1">
                   <span className={`px-2 py-1 rounded bg-slate-950/90 border font-mono text-[10px] font-bold ${
@@ -561,17 +581,23 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
             )}
           </div>
 
-          {/* Prototype Transparency Note */}
+          {/* Prototype / Mode Transparency Indicator */}
           <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-400 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <Cpu className="w-3.5 h-3.5 text-teal-400" />
-              <span>AI Engine: <strong className="text-slate-200">Prototype Analysis Layer</strong></span>
-            </span>
-            {isDemoScenario && (
-              <span className="px-2 py-0.5 rounded bg-teal-950 border border-teal-500/40 text-teal-300 font-bold text-[10px]">
-                DEMO SCENARIO
+              <span>
+                Mode: <strong className="text-slate-200">{isDemoScenario ? "Demo Scenario" : uploadedImage ? "AI Image Assessment" : "Idle Input"}</strong>
               </span>
-            )}
+            </span>
+            {isDemoScenario ? (
+              <span className="px-2 py-0.5 rounded bg-teal-950 border border-teal-500/40 text-teal-300 font-bold text-[10px]">
+                DEMO / PROTOTYPE DATA
+              </span>
+            ) : uploadedImage ? (
+              <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/40 text-emerald-300 font-bold text-[10px]">
+                UPLOADED IMAGE
+              </span>
+            ) : null}
           </div>
 
         </div>
@@ -579,7 +605,7 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
         {/* Right Column: AI Results, Condition & Recovery Recommendation (7 cols) */}
         <div className="lg:col-span-7 space-y-5">
           
-          {/* 1. IDLE STATE CARD: Prompt user to upload */}
+          {/* 1. IDLE STATE CARD: Prompt user to upload or pick demo */}
           {!activeResult && !isProcessing && (
             <div className="p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-4">
               <div className="w-14 h-14 mx-auto rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
@@ -590,7 +616,7 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
                   No Active C&D Waste Assessment
                 </h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Upload a construction material image (Concrete, Brick, Wood, or Metal) using the dropzone on the left to generate an AI evaluation, or select a demo scenario above.
+                  Upload a construction material image (Concrete, Brick, Wood, or Metal) using the dropzone on the left to run AI image assessment, or select a demo scenario above.
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] font-mono text-slate-500 pt-2">
@@ -602,8 +628,8 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
             </div>
           )}
 
-          {/* 2. LOW CONFIDENCE WARNING BANNER (Requirement 6) */}
-          {activeResult && activeResult.isLowConfidence && (
+          {/* 2. LOW CONFIDENCE WARNING BANNER */}
+          {activeResult && activeResult.isLowConfidence && !isDemoScenario && (
             <div className="p-4 rounded-2xl bg-amber-950/50 border border-amber-500/50 text-amber-200 text-xs font-mono space-y-2">
               <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
                 <AlertTriangle className="w-5 h-5 shrink-0" />
@@ -624,17 +650,23 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
               {/* AI CLASSIFICATION & CONDITION ASSESSMENT CARDS */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
-                {/* AI Detection Card */}
+                {/* AI Detection / Classification Card */}
                 <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                     <span className="text-[10px] font-mono font-bold uppercase text-teal-400">
-                      AI Detection
+                      {isDemoScenario ? "DEMO SCENARIO DATA" : "AI IMAGE ASSESSMENT"}
                     </span>
-                    <span className="text-[10px] font-mono text-slate-500">Classification</span>
+                    <span className="text-[10px] font-mono text-slate-500">
+                      {isDemoScenario ? "Prototype Benchmark" : "Classification"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-mono text-slate-400 uppercase">Material:</span>
-                    <p className="text-xl font-extrabold text-white tracking-tight font-mono">{activeResult.material}</p>
+                    <span className="text-[10px] font-mono text-slate-400 uppercase">
+                      {isDemoScenario ? "Demo Material:" : "Material:"}
+                    </span>
+                    <p className="text-xl font-extrabold text-white tracking-tight font-mono">
+                      {isDemoScenario ? `DEMO: ${activeResult.material}` : activeResult.material}
+                    </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/60 font-mono text-xs">
                     <div>
@@ -717,8 +749,11 @@ export default function CdWastePage({ onSaveAssessment, onViewReport, showToast 
 
                 <button
                   onClick={() => {
-                    onViewReport(buildRecordObject());
-                    setIsSaved(true);
+                    const record = buildRecordObject();
+                    if (record) {
+                      onViewReport(record);
+                      setIsSaved(true);
+                    }
                   }}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-xs border border-slate-700 transition cursor-pointer"
                 >
